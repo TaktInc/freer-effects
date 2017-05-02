@@ -78,10 +78,11 @@ instance ( LastMember m (FixBase m r ': r)
     send $ f $ unsafeCoerce i
   restoreM = return
 
-prog :: Eff [FixBase IO '[State Char, IO], State Char, IO] Bool
+prog :: (r ~ '[State Char, IO]) => Eff (FixBase IO r ': r) Bool
 prog = do
   put 'g'
-  bracket get (\(c :: Char) -> send $ putStrLn $ show c) (\c -> get >>= send . putStrLn . pure)
+  bracket get (\c -> send $ putStrLn $ pure c)
+              (\c -> get >>= send . putStrLn . pure)
   get >>= send . putStrLn . pure
   return True
 
