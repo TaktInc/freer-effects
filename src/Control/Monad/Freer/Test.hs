@@ -78,18 +78,33 @@ instance ( LastMember m (FixBase m r ': r)
     send $ f $ unsafeCoerce i
   restoreM = return
 
-type Fixed cs m r a = (Members cs r, LastMember m (FixBase m r ': r)) => Eff (FixBase m r ': r) a
+type Fixed cs m a = forall r
+                  . ( Members cs r
+                    , LastMember m (FixBase m r ': r)
+                    )
+                 => Eff (FixBase m r ': r) a
 
-prog :: Fixed '[State Char] IO r Bool
+data Console a where
+  Write :: Show a => a -> Console ()
+
+write :: (Member Console r, Show a) => a -> Eff r ()
+write = send . Write
+
+runWriter :: Member IO r => Eff (Console ': r) a -> Eff r a
+runWriter = runNat nat
+  where
+    nat :: Console x -> IO x
+    nat (Write a) = putStrLn $ show a
+
+prog :: Fixed '[State Char, Console] IO ()
 prog = do
   put 'g'
   x <- get @Char
-  bracket get (\c -> send . putStrLn . show $ c == x)
-              (\_ -> get >>= send . putStrLn . show . (x ==))
-  get >>= send . putStrLn . pure
-  return True
+  bracket get (\c -> write $ c == x)
+              (\_ -> get >>= write . (x ==))
+  get @Char >>= write
 
 main :: IO ()
 main = do
-  runFixM (fmap fst . runM . flip runState 'c') prog
+  runFixM (fmap fst . runM . runWriter . flip runState 'c') prog
   return ()
